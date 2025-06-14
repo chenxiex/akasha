@@ -14,6 +14,14 @@ def main():
     # 初始化数据库
     db_init.initialize_database()
 
+    # 确保必要的目录存在
+    data_path = os.getenv("DATA_PATH", "data")
+    data_path = pathlib.Path(data_path)
+    docs_path = data_path / "docs"
+    thumbnails_path = data_path / "thumbnails"
+    docs_path.mkdir(parents=True, exist_ok=True)
+    thumbnails_path.mkdir(parents=True, exist_ok=True)
+
     # 创建嵌入客户端
     import cohere
     CO_API_KEY = os.getenv("CO_API_KEY")
@@ -24,8 +32,6 @@ def main():
 
     # 创建索引器客户端
     indexer_client = indexer.indexer(embed_client)
-    data_path = os.getenv("DATA_PATH", "data")
-    data_path = pathlib.Path(data_path)
     if not data_path.exists():
         raise ValueError(f"Data path {data_path} does not exist.")
     
