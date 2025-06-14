@@ -25,7 +25,7 @@ class indexer:
             "CREATE INDEX IF NOT EXISTS embeddings_hnsw_idx ON embeddings USING hnsw (embedding vector_cosine_ops)"
         )
 
-    def create_thumbnails(self, docs_path:pathlib.Path, thumbnails_path:pathlib.Path):
+    def create_thumbnails(self, docs_path:pathlib.Path, thumbnails_path:pathlib.Path, recreate:bool=False):
         '''
         创建缩略图
 
@@ -45,7 +45,7 @@ class indexer:
             image_files.extend(list(docs_path.glob(f'*{ext}')))
             image_files.extend(list(docs_path.glob(f'*{ext.upper()}')))
         for file in image_files:
-            if not thumbnails_path.joinpath(file.name).exists():
+            if not thumbnails_path.joinpath(file.name).exists() or recreate:
                 with PIL.Image.open(file) as thumbnail:
                     try:
                         utilities.compress_image(thumbnail, thumbnail_size)
