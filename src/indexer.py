@@ -7,6 +7,7 @@ from pgvector.psycopg2 import register_vector
 import logging
 import numpy as np
 import utilities
+from typing import Dict, List, Tuple, Any
 
 class indexer:
     embed:embedder.embed
@@ -25,46 +26,99 @@ class indexer:
             "CREATE INDEX IF NOT EXISTS embeddings_hnsw_idx ON embeddings USING hnsw (embedding vector_cosine_ops)"
         )
 
-    def create_thumbnails(self, docs_path:pathlib.Path, thumbnails_path:pathlib.Path, recreate:bool=False):
+    def create_thumbnails(self, docs_path:pathlib.Path, thumbnails_path:pathlib.Path, recreate:bool=False) -> Dict[str, Any]:
         '''
         创建缩略图
 
         :param docs_path: 图片文件夹路径
-
         :param thumbnails_path: 缩略图文件夹路径
+        :param recreate: 是否重新创建已存在的缩略图
+
+        :return: 包含处理结果统计的字典，格式为 {'total': int, 'success': int, 'failed': int, 'skipped': int, 'failures': list}
         '''
         thumbnail_size = 500 * 1024
+        result = {
+            'total': 0,
+            'success': 0,
+            'failed': 0,
+            'skipped': 0,
+            'failures': []  # 记录失败的文件及原因
+        }
 
         if not docs_path.exists():
             raise ValueError(f"Docs path {docs_path} does not exist.")
+        
         # 确保缩略图目录存在
         thumbnails_path.mkdir(parents=True, exist_ok=True)
+        
         # 生成缩略图
         image_files = []
         for ext in ['.jpg', '.jpeg', '.png']:
             image_files.extend(list(docs_path.glob(f'*{ext}')))
             image_files.extend(list(docs_path.glob(f'*{ext.upper()}')))
-        for file in image_files:
-            if not thumbnails_path.joinpath(file.name).exists() or recreate:
+        
+        result['total'] = len(image_files)
+        
+        for i, file in enumerate(image_files):
+            thumbnail_path = thumbnails_path / file.name
+            
+            # 如果缩略图已存在且不需要重新创建，则跳过
+            if thumbnail_path.exists() and not recreate:
+                result['skipped'] += 1
+                continue
+                
+            try:
                 with PIL.Image.open(file) as thumbnail:
                     try:
                         utilities.compress_image(thumbnail, thumbnail_size)
-                        thumbnail_path = thumbnails_path / file.name
                         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
                         thumbnail.save(thumbnail_path, format=thumbnail.format)
+                        logging.info(f"Created thumbnail for {file.name} ({i+1}/{result['total']})")
+                        result['success'] += 1
                     except Exception as e:
-                        logging.error(f"Failed to create thumbnail for {file}: {e}")
+                        error_msg = str(e)
+                        logging.error(f"Failed to create thumbnail for {file}: {error_msg}")
+                        result['failed'] += 1
+                        result['failures'].append({
+                            'file': str(file),
+                            'stage': 'compress_and_save',
+                            'error': error_msg
+                        })
+            except Exception as e:
+                error_msg = str(e)
+                logging.error(f"Failed to open image file {file}: {error_msg}")
+                result['failed'] += 1
+                result['failures'].append({
+                    'file': str(file),
+                    'stage': 'open_image',
+                    'error': error_msg
+                })
+        
+        return result
 
-    def index_images(self, docs_path:pathlib.Path):
+    def index_images(self, docs_path:pathlib.Path) -> Dict[str, Any]:
         '''
         索引图片文件夹中的图片
 
         :param docs_path: 图片文件夹路径
+
+        :return: 包含处理结果统计的字典，格式为 
+                {'total_found': int, 'newly_indexed': int, 'failed_index': int, 
+                 'deleted': int, 'index_created': bool, 'failures': list}
         '''
+        result = {
+            'total_found': 0,
+            'newly_indexed': 0,
+            'failed_index': 0,
+            'deleted': 0,
+            'index_created': False,
+            'failures': []  # 记录失败的文件及原因
+        }
+
         if not docs_path.exists():
             raise ValueError(f"Docs path {docs_path} does not exist.")
 
-        conn=db_init.get_db_connection()
+        conn = db_init.get_db_connection()
         cur = conn.cursor()
         register_vector(cur)
 
@@ -73,6 +127,8 @@ class indexer:
         for ext in ['.jpg', '.jpeg', '.png']:
             image_files.extend(list(docs_path.glob(f'*{ext}')))
             image_files.extend(list(docs_path.glob(f'*{ext.upper()}')))
+
+        result['total_found'] = len(image_files)
 
         # 查询已经在数据库中的文件名
         cur.execute("SELECT file_name FROM embeddings")
@@ -87,23 +143,49 @@ class indexer:
         logging.info(f"{len(unindexed_files)} unindexed files found.")
         
         # 处理未索引的图片文件
-        for file in unindexed_files:
-            with PIL.Image.open(file) as image:
-                if image.format not in ["JPEG", "PNG"]:
-                    logging.warning(f"Unsupported image format: {image.format} for file {file}. Skipping.")
-                    continue
-                # 嵌入图片
-                try:
-                    logging.info(f"Indexing {file}...")
-                    embedding_vector = self.embed.embed_image(image)
-                    embedding_vector = np.array(embedding_vector)
-                    cur.execute(
-                        "INSERT INTO embeddings (file_name, embedding) VALUES (%s, %s)",
-                        (file.name, embedding_vector)
-                    )
-                    conn.commit()
-                except Exception as e:
-                    logging.error(f"Failed to index {file}: {e}")
+        for i, file in enumerate(unindexed_files):
+            try:
+                with PIL.Image.open(file) as image:
+                    if image.format not in ["JPEG", "PNG"]:
+                        logging.warning(f"Unsupported image format: {image.format} for file {file}. Skipping.")
+                        result['failures'].append({
+                            'file': str(file),
+                            'stage': 'check_format',
+                            'error': f"Unsupported image format: {image.format}"
+                        })
+                        result['failed_index'] += 1
+                        continue
+                    
+                    # 嵌入图片
+                    try:
+                        logging.info(f"Indexing {file.name} ({i+1}/{len(unindexed_files)})...")
+                        embedding_vector = self.embed.embed_image(image)
+                        embedding_vector = np.array(embedding_vector)
+                        cur.execute(
+                            "INSERT INTO embeddings (file_name, embedding) VALUES (%s, %s)",
+                            (file.name, embedding_vector)
+                        )
+                        conn.commit()
+                        result['newly_indexed'] += 1
+                    except Exception as e:
+                        error_msg = str(e)
+                        logging.error(f"Failed to index {file}: {error_msg}")
+                        result['failures'].append({
+                            'file': str(file),
+                            'stage': 'embed_and_insert',
+                            'error': error_msg
+                        })
+                        result['failed_index'] += 1
+                        conn.rollback()
+            except Exception as e:
+                error_msg = str(e)
+                logging.error(f"Failed to open image file {file}: {error_msg}")
+                result['failures'].append({
+                    'file': str(file),
+                    'stage': 'open_file',
+                    'error': error_msg
+                })
+                result['failed_index'] += 1
             
         # 删除数据库中已删除的文件记录
         if deleted_file_names:
@@ -114,20 +196,35 @@ class indexer:
                 )
                 conn.commit()
                 logging.info(f"Deleted {len(deleted_file_names)} files from database that no longer exist.")
+                result['deleted'] = len(deleted_file_names)
             except Exception as e:
-                logging.error(f"Failed to delete files from database: {e}")
+                error_msg = str(e)
+                logging.error(f"Failed to delete files from database: {error_msg}")
+                result['failures'].append({
+                    'stage': 'delete_records',
+                    'error': error_msg
+                })
+                conn.rollback()
         
         # 创建索引
         try:
             self.__create_index(cur)
             conn.commit()
             logging.info("Index created successfully.")
+            result['index_created'] = True
         except Exception as e:  
-            logging.error(f"Failed to create index: {e}")
+            error_msg = str(e)
+            logging.error(f"Failed to create index: {error_msg}")
+            result['failures'].append({
+                'stage': 'create_index',
+                'error': error_msg
+            })
             conn.rollback()
         
         cur.close()
         conn.close()
+        
+        return result
 
 def main():
     import cohere
