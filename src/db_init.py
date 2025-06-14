@@ -35,12 +35,31 @@ def check_table_exists(table_name:str, cursor:psycopg2.extensions.cursor):
     table_exists = fetch_result[0] if fetch_result is not None else False
     return table_exists
 
-def initialize_database():
-    """初始化数据库表结构"""
+def initialize_database(recreate:bool=False):
+    """
+    初始化数据库表结构
+
+    :param recreate: 是否重新创建表结构，默认为False
+
+    :raises Exception: 如果数据库连接或表创建失败
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('CREATE EXTENSION IF NOT EXISTS vector')
     register_vector(cursor)
+
+    if recreate:
+        try:
+            # 删除现有表
+            cursor.execute("DROP TABLE IF EXISTS embeddings;")
+            cursor.execute("DROP TABLE IF EXISTS schema_migrations;")
+            conn.commit()
+        except Exception as e:
+            logging.error(f"删除表时出错: {e}")
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            return
 
     try:
         # 创建需要的表
