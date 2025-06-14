@@ -28,7 +28,7 @@ class embed(Protocol):
 
 class cohere_embed:
     client:cohere.ClientV2
-    image_max_size:int=1*1024*1024
+    image_max_size:int=256*1024
     model_name:str
     # 每一个请求携带的图片数
     retry_limit:int=3
