@@ -3,12 +3,11 @@ import io
 import base64
 import logging
 
-def compress_image(image:PIL.Image.Image, target_size):
+def compress_image(image:PIL.Image.Image, target_size) -> None:
     '''
     压缩图像至指定大小
 
     :param image: 待压缩的图像。该图像将被原地压缩
-
     :param target_size: 目标大小，单位为字节
 
     :raises ValueError: 如果图像格式不受支持或无法识别
@@ -37,7 +36,6 @@ def thumbnail_url(image: PIL.Image.Image, target_size) -> str:
     压缩图像并生成base64编码的URL
 
     :param image: 待处理的图片。该图像将被原地压缩
-
     :param target_size: 目标大小，单位为字节
 
     :return: 图片URL

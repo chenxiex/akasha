@@ -6,7 +6,7 @@ import os
 import logging
 from pgvector.psycopg2 import register_vector
 
-def get_db_connection():
+def get_db_connection() -> psycopg2.extensions.connection:
     """创建并返回数据库连接"""
     db_host = os.getenv("POSTGRES_HOST")
     db_name = os.getenv("POSTGRES_DB")
@@ -21,7 +21,7 @@ def get_db_connection():
     )
     return conn
 
-def check_table_exists(table_name:str, cursor:psycopg2.extensions.cursor):
+def check_table_exists(table_name:str, cursor:psycopg2.extensions.cursor) -> bool:
     # 检查表是否存在
     cursor.execute(f"""
         SELECT EXISTS (
@@ -35,7 +35,7 @@ def check_table_exists(table_name:str, cursor:psycopg2.extensions.cursor):
     table_exists = fetch_result[0] if fetch_result is not None else False
     return table_exists
 
-def initialize_database(recreate:bool=False):
+def initialize_database(recreate:bool=False) -> None:
     """
     初始化数据库表结构
 
@@ -52,7 +52,7 @@ def initialize_database(recreate:bool=False):
         try:
             # 删除现有表
             cursor.execute("DROP TABLE IF EXISTS embeddings;")
-            cursor.execute("DROP TABLE IF EXISTS schema_migrations;")
+            cursor.execute("DROP TABLE IF EXISTS settings;")
             conn.commit()
         except Exception as e:
             logging.error(f"删除表时出错: {e}")
@@ -79,17 +79,7 @@ def initialize_database(recreate:bool=False):
             );
         """)
         
-        # 添加版本控制表来跟踪架构变更
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
         conn.commit()
-
-        # 架构更新
-        apply_migrations(conn)
 
     except Exception as e:
         logging.error(f"初始化数据库时出错: {e}")
@@ -98,25 +88,5 @@ def initialize_database(recreate:bool=False):
         cursor.close()
         conn.close()
 
-def apply_migrations(conn):
-    """应用数据库迁移"""
-    cursor = conn.cursor()
-    cursor.execute("SELECT MAX(version) FROM schema_migrations;")
-    fetch_result = cursor.fetchone()
-    current_version = fetch_result[0] if fetch_result is not None else None
-
-    try:
-        if current_version is None:
-            cursor.execute("INSERT INTO schema_migrations (version) VALUES (1);")
-            current_version = 1
- 
-        conn.commit()
-
-    except Exception as e:
-        logging.error(f"应用迁移时出错: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-
 if __name__ == "__main__":
-    initialize_database()
+    initialize_database(recreate=True)

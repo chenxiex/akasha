@@ -24,12 +24,10 @@ class queryer:
         query_vector = self.embed.embed_query(query_text)
         query_vector = np.array(query_vector)
 
-        # 连接到数据库
         conn = db_init.get_db_connection()
         cur = conn.cursor()
         register_vector(cur)
 
-        # 执行向量相似度查询，返回文件名和相似度
         cur.execute(
             "SELECT file_name, 1 - (embedding <=> %s) AS cosine_similarity FROM embeddings WHERE embedding <=> %s < %s ORDER BY cosine_similarity DESC",
             (query_vector, query_vector, max_dist)
@@ -40,7 +38,6 @@ class queryer:
             logging.info("No results found for the query.")
             return []
         
-        # 提取文件名和相似度
         result_pairs = [(row[0], row[1]) for row in results]
         logging.info(f"Found {len(result_pairs)} results for the query.")
         return result_pairs

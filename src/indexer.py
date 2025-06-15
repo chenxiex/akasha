@@ -11,17 +11,16 @@ from typing import Dict, List, Tuple, Any
 
 class indexer:
     embed:embedder.embed
-    def __init__(self, embed:embedder.embed):
+    def __init__(self, embed:embedder.embed) -> None:
         '''
         :param embed: embedding client
         '''
         self.embed = embed
     
-    def __create_index(self, cur):
+    def __create_index(self, cur) -> None:
         '''
         创建索引
         '''
-        # 创建索引
         cur.execute(
             "CREATE INDEX IF NOT EXISTS embeddings_hnsw_idx ON embeddings USING hnsw (embedding vector_cosine_ops)"
         )
@@ -34,21 +33,21 @@ class indexer:
         :param thumbnails_path: 缩略图文件夹路径
         :param recreate: 是否重新创建已存在的缩略图
 
-        :return: 包含处理结果统计的字典，格式为 {'total': int, 'success': int, 'failed': int, 'skipped': int, 'failures': list}
+        :return: 包含处理结果统计的字典，格式为 {'total': int, 'success': int, 'deleted': int, 'failed': int, 'skipped': int, 'failures': list}
         '''
         thumbnail_size = 500 * 1024
         result = {
             'total': 0,
             'success': 0,
+            'deleted': 0,
             'failed': 0,
             'skipped': 0,
-            'failures': []  # 记录失败的文件及原因
+            'failures': []
         }
 
         if not docs_path.exists():
             raise ValueError(f"Docs path {docs_path} does not exist.")
         
-        # 确保缩略图目录存在
         thumbnails_path.mkdir(parents=True, exist_ok=True)
         
         # 生成缩略图
@@ -62,7 +61,6 @@ class indexer:
         for i, file in enumerate(image_files):
             thumbnail_path = thumbnails_path / file.name
             
-            # 如果缩略图已存在且不需要重新创建，则跳过
             if thumbnail_path.exists() and not recreate:
                 result['skipped'] += 1
                 continue
@@ -94,9 +92,25 @@ class indexer:
                     'error': error_msg
                 })
         
+        # 移除已删除的缩略图
+        existing_thumbnails = set(thumbnails_path.glob('*'))
+        for existing_thumbnail in existing_thumbnails:
+            if not existing_thumbnail.name in [file.name for file in image_files]:
+                try:
+                    existing_thumbnail.unlink()
+                    logging.info(f"Deleted thumbnail {existing_thumbnail.name} as the original image no longer exists.")
+                    result['deleted'] = result.get('deleted', 0) + 1
+                except Exception as e:
+                    error_msg = str(e)
+                    logging.error(f"Failed to delete thumbnail {existing_thumbnail.name}: {error_msg}")
+                    result['failures'].append({
+                        'file': str(existing_thumbnail),
+                        'stage': 'delete_thumbnail',
+                        'error': error_msg
+                    })
         return result
 
-    def index_images(self, docs_path:pathlib.Path) -> Dict[str, Any]:
+    def index_images(self, docs_path:pathlib.Path, recreate:bool=False) -> Dict[str, Any]:
         '''
         索引图片文件夹中的图片
 
@@ -112,7 +126,7 @@ class indexer:
             'failed_index': 0,
             'deleted': 0,
             'index_created': False,
-            'failures': []  # 记录失败的文件及原因
+            'failures': []
         }
 
         if not docs_path.exists():
@@ -121,6 +135,16 @@ class indexer:
         conn = db_init.get_db_connection()
         cur = conn.cursor()
         register_vector(cur)
+
+        if recreate:
+            try:
+                # 删除现有表
+                cur.execute("DROP TABLE IF EXISTS embeddings;")
+                conn.commit()
+                db_init.initialize_database()
+            except Exception as e:
+                logging.error(f"Failed to recreate embeddings table: {e}")
+                conn.rollback()
 
         # 获取目录下所有jpg和png文件
         image_files = []
@@ -179,7 +203,7 @@ class indexer:
                         conn.rollback()
             except Exception as e:
                 error_msg = str(e)
-                logging.error(f"Failed to open image file {file}: {error_msg}")
+                logging.error(f"Failed to index image file {file}: {error_msg}")
                 result['failures'].append({
                     'file': str(file),
                     'stage': 'open_file',

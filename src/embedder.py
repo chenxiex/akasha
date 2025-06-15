@@ -28,9 +28,8 @@ class embed(Protocol):
 
 class cohere_embed:
     client:cohere.ClientV2
-    image_max_size:int=256*1024
-    model_name:str
-    # 每一个请求携带的图片数
+    image_max_size:int=256*1024 # 最大图片大小，单位为字节。部分API对图片大小限制为Tokens，即使很小的图片也可能超过限制，需要根据具体情况调整。
+    model_name:str="Cohere-embed-v3-multilingual"
     retry_limit:int=3
     retry_interval:int=5
 
@@ -74,7 +73,6 @@ class cohere_embed:
         嵌入查询文本
 
         :param text: 查询文本
-
         :param model_name: 模型名称
 
         :return: 嵌入向量
@@ -102,6 +100,6 @@ if __name__ == "__main__":
     cohere_client = cohere.ClientV2(api_key=CO_API_KEY)
     embed_client = cohere_embed(cohere_client)
     embeddings = embed_client.embed_image(PIL.Image.open("data/docs/10.png"))
-    print(embeddings[0:10])  # 打印前10个元素
+    print(embeddings[0:10])
     embedded_query = embed_client.embed_query("一张头像")
     print(embedded_query[0:10])
