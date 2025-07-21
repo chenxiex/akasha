@@ -1,9 +1,9 @@
 import PIL.Image
-from typing import Protocol
+from typing import Protocol, List
 
 
 class embed(Protocol):
-    def embed_image(self, image: PIL.Image.Image) -> list[float]:
+    def embed_image(self, image: PIL.Image.Image) -> List[float]:
         '''
         嵌入图片
 
@@ -11,9 +11,9 @@ class embed(Protocol):
 
         :return: 嵌入向量
         '''
-        return list[float]()
+        ...
 
-    def embed_query(self, text: str) -> list[float]:
+    def embed_query(self, text: str) -> List[float]:
         '''
         嵌入查询文本
 
@@ -21,4 +21,4 @@ class embed(Protocol):
 
         :return: 嵌入向量
         '''
-        return list[float]()
+        ...

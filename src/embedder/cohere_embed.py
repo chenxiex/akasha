@@ -3,6 +3,7 @@ import PIL.Image
 import utilities
 import time
 import logging
+from typing import List
 
 
 class cohere_embed:
@@ -20,7 +21,7 @@ class cohere_embed:
         self.client = client
         self.model_name = model_name
 
-    def embed_image(self, image: PIL.Image.Image):
+    def embed_image(self, image: PIL.Image.Image) -> List[float]:
         '''
         嵌入图片
 
@@ -49,16 +50,15 @@ class cohere_embed:
         else:
             raise ValueError("No embeddings returned from the API response.")
 
-    def embed_query(self, text: str, model_name: str = "Cohere-embed-v3-multilingual") -> list[float]:
+    def embed_query(self, text: str) -> List[float]:
         '''
         嵌入查询文本
 
         :param text: 查询文本
-        :param model_name: 模型名称
 
         :return: 嵌入向量
         '''
-        response = self.client.embed(model=model_name,
+        response = self.client.embed(model=self.model_name,
                                      input_type="search_query",
                                      embedding_types=["float"],
                                      texts=[text])
