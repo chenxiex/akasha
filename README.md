@@ -6,6 +6,8 @@ Akasha图片检索系统是一个以文搜图的图片检索系统。
 
 建议使用 [Dev Containers](https://containers.dev/) 配置环境。
 
+**注意**：预构建镜像在 CPU only 环境下构建。如需使用硬件加速推理，可能需要重新安装相关包。
+
 否则，使用 `conda` 参考 `.github/environment.yml` 创建 `python` 环境。然后，自行搭建 `PostgreSQL+pgvector` 数据库。
 
 环境搭建完成后，参考 `.env.example` 配置环境变量。你可以使用 `.env` 配置环境变量。
