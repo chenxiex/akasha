@@ -10,19 +10,37 @@ class CLIP_embed:
     model_name: str = "ViT-B/32"
     model: clip.model.CLIP
     preprocess: Callable[[PIL.Image.Image], torch.Tensor]
+    device: torch.device
 
-    def __init__(self, model=None, preprocess=None, model_name: str = "ViT-B/32"):
+    def __init__(self, model=None, preprocess=None, model_name: str = "ViT-B/32", device=None):
         '''
         :param model: CLIP model
         :param preprocess: CLIP preprocess
         :param model_name: a name of available CLIP models
+        :param device: 设备类型，如果为None则自动选择（优先级：cuda > mps > cpu）
         '''
         self.model_name = model_name
+        
+        # 自动选择设备
+        if device is None:
+            if torch.cuda.is_available():
+                self.device = torch.device("cuda")
+            elif torch.backends.mps.is_available():
+                self.device = torch.device("mps")
+            else:
+                self.device = torch.device("cpu")
+        else:
+            self.device = torch.device(device)
+        
         if (model is None or preprocess is None):
-            new_model, new_preprocess = clip.load(model_name)
+            new_model, new_preprocess = clip.load(model_name, device=self.device)
             self.model=model if model is not None else new_model
             self.preprocess=preprocess if preprocess is not None else new_preprocess
-        self.model.cuda().eval()
+        else:
+            self.model = model
+            self.preprocess = preprocess
+        
+        self.model.to(self.device).eval()
 
     def embed_image(self, image: PIL.Image.Image) -> List[float]:
         '''
@@ -37,7 +55,7 @@ class CLIP_embed:
         try:
             image = image.convert("RGB")
             image_input = self.preprocess(image)
-            image_input = torch.tensor(np.stack([image_input])).cuda()
+            image_input = torch.tensor(np.stack([image_input])).to(self.device)
         except Exception as e:
             logging.error(f"Embedding image failed: {e}.")
             raise ValueError("Image cannot be transformed into tensor")
@@ -54,7 +72,7 @@ class CLIP_embed:
 
         :return: 嵌入向量
         '''
-        text_input = clip.tokenize(text).cuda()
+        text_input = clip.tokenize(text).to(self.device)
         with torch.no_grad():
             text_features = self.model.encode_text(text_input).float()
         text_features /= text_features.norm(dim=-1, keepdim=True)
