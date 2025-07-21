@@ -1,4 +1,5 @@
 import clip
+import clip.model
 import torch
 import torchvision
 from typing import Callable, List
