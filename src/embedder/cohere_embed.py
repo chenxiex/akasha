@@ -47,7 +47,7 @@ class cohere_embed:
                     "CO_API_KEY not provided")
         else:
             CO_API_KEY = api_key
-        cohere_client = cohere.ClientV2(api_key=CO_API_KEY)
+        cohere_client = cohere.ClientV2(api_key=CO_API_KEY, base_url=os.getenv("CO_API_URL"))
         return cohere_client
 
     def embed_image(self, image: PIL.Image.Image) -> List[float]:
