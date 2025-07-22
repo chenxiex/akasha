@@ -1,9 +1,13 @@
-import cohere
-import PIL.Image
-import utilities
 import time
 import logging
 from typing import List
+import os
+
+import cohere
+import PIL.Image
+from dotenv import load_dotenv
+
+import utilities
 
 
 class cohere_embed:
@@ -14,12 +18,37 @@ class cohere_embed:
     retry_limit: int = 3
     retry_interval: int = 5
 
-    def __init__(self, client: cohere.ClientV2, model_name: str = "Cohere-embed-v3-multilingual"):
+    def __init__(self, client: cohere.ClientV2 | None = None, model_name: str = "Cohere-embed-v3-multilingual"):
         '''
         :param client: cohere client
         '''
-        self.client = client
+        if client is not None:
+            self.client = client
+        else:
+            self.client = self.__create_cohere_client()
         self.model_name = model_name
+
+    def __create_cohere_client(self, api_key: str = "") -> cohere.ClientV2:
+        '''
+        创建Cohere客户端
+
+        :param api_key: Cohere API密钥
+
+        :return: Cohere客户端实例
+
+        :raises ValueError: 如果API密钥未提供且环境变量中未找到CO_API_KEY
+        '''
+        load_dotenv()
+
+        if not api_key:
+            CO_API_KEY = os.getenv("CO_API_KEY")
+            if not CO_API_KEY:
+                raise ValueError(
+                    "CO_API_KEY not provided")
+        else:
+            CO_API_KEY = api_key
+        cohere_client = cohere.ClientV2(api_key=CO_API_KEY)
+        return cohere_client
 
     def embed_image(self, image: PIL.Image.Image) -> List[float]:
         '''
