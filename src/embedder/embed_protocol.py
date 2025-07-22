@@ -9,7 +9,7 @@ class embed(Protocol):
 
         :param image: 图片对象
 
-        :return: 嵌入向量
+        :return: 嵌入向量，长度应为1024
         '''
         ...
 
@@ -19,6 +19,6 @@ class embed(Protocol):
 
         :param text: 查询文本
 
-        :return: 嵌入向量
+        :return: 嵌入向量，长度应为1024
         '''
         ...

@@ -1,7 +1,6 @@
 import clip
 import clip.model
 import torch
-import torchvision
 from typing import Callable, List
 import PIL.Image
 import logging
@@ -63,7 +62,10 @@ class CLIP_embed:
         with torch.no_grad():
             image_features = self.model.encode_image(image_input).float()
         image_features /= image_features.norm(dim=-1, keepdim=True)
-        return image_features[0]
+        # 将512维向量填充至1024维
+        feature_vector = image_features[0]
+        padded_vector = torch.cat([feature_vector, torch.zeros(1024 - len(feature_vector)).to(self.device)])
+        return padded_vector.cpu().tolist()
 
     def embed_query(self, text: str) -> List[float]:
         '''
@@ -77,4 +79,7 @@ class CLIP_embed:
         with torch.no_grad():
             text_features = self.model.encode_text(text_input).float()
         text_features /= text_features.norm(dim=-1, keepdim=True)
-        return text_features[0]
+        # 将512维向量填充至1024维
+        feature_vector = text_features[0]
+        padded_vector = torch.cat([feature_vector, torch.zeros(1024 - len(feature_vector)).to(self.device)])
+        return padded_vector.cpu().tolist()
